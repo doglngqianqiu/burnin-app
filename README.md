@@ -32,6 +32,21 @@
 
 临界值与急停值随目标自动上移（目标 +2 / +4，最高 62 / 64℃），目标 ≥48℃ 时开始前会二次确认。
 
+## 下载安装
+
+### 方式一：直接下载 APK（推荐）
+
+到 [Releases](https://github.com/doglngqianqiu/burnin-app/releases) 下载最新的 `burnin.apk`，
+在手机上允许「安装未知应用」后安装即可。
+
+- 包名 `com.dsh.burnin`，minSdk 26（Android 8+），targetSdk 31
+- 用的是调试签名，首次安装会提示「未知来源」；Play Protect 可能提示风险，选择仍要安装
+- 装新版前若签名变化，需要先卸载旧版
+
+### 方式二：自己编译
+
+克隆仓库后按下面的「构建」一节操作，产物在 `dist/burnin.apk`。
+
 ## 构建
 
 需要 `aapt`、`zipalign`、`apksigner`、JDK 17+（Debian/Ubuntu 可直接 apt 安装），以及 `curl`、`unzip`。
