@@ -112,6 +112,22 @@ public class MainActivity extends Activity {
         new Thread(new Runnable() {
             @Override
             public void run() {
+                while (uiAlive) {
+                    try {
+                        Thread.sleep(900);
+                    } catch (InterruptedException ignored) {
+                        return;
+                    }
+                    try {
+                        Sensors.update();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }, "sensor-poll").start();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
                 final DeviceProfile p = DeviceProfile.detect();
                 ui.post(new Runnable() {
                     @Override
@@ -124,8 +140,11 @@ public class MainActivity extends Activity {
         ui.post(ticker);
     }
 
+    private volatile boolean uiAlive = true;
+
     @Override
     protected void onDestroy() {
+        uiAlive = false;
         ui.removeCallbacks(ticker);
         try {
             if (batteryRx != null) unregisterReceiver(batteryRx);
@@ -482,10 +501,6 @@ public class MainActivity extends Activity {
     }
 
     private void render() {
-        try {
-            Sensors.update();
-        } catch (Throwable ignored) {
-        }
         boolean on = Engine.running;
         if (on && Engine.paused) {
             tvState.setText("已暂停 · 降温中");
