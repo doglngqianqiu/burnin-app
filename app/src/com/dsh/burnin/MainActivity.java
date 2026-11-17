@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private TextView tvState, tvMain, tvSub, tvRun, tvMode, tvNote, tvTarget, tvProfile;
-    private Button btnToggle, btnPerm, btnCpu, btnMixed;
+    private Button btnToggle, btnPerm, btnCpu, btnMixed, btnAggressive;
     private DeviceProfile profile;
     private SeekBar seek;
     private BroadcastReceiver batteryRx;
@@ -299,6 +299,23 @@ public class MainActivity extends Activity {
         lpBtn.topMargin = dp(16);
         root.addView(btnToggle, lpBtn);
 
+        btnAggressive = new Button(this);
+        btnAggressive.setText("⚡ 激进升温（100% 满载 · 不控温）");
+        btnAggressive.setTextSize(15);
+        btnAggressive.setAllCaps(false);
+        btnAggressive.setTextColor(Color.WHITE);
+        btnAggressive.setBackground(roundRect(0xFF8B1E1E, dp(14)));
+        btnAggressive.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                confirmAggressive();
+            }
+        });
+        LinearLayout.LayoutParams lpAgg = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        lpAgg.topMargin = dp(10);
+        root.addView(btnAggressive, lpAgg);
+
         btnPerm = new Button(this);
         btnPerm.setText("授权 Shizuku");
         btnPerm.setTextSize(14);
@@ -345,11 +362,13 @@ public class MainActivity extends Activity {
             confirmHighTarget();
             return;
         }
-        startBurn();
+        startBurn(false);
     }
 
-    private void startBurn() {
-        startForegroundService(new Intent(this, BurnService.class));
+    private void startBurn(boolean aggressive) {
+        Intent i = new Intent(this, BurnService.class);
+        i.putExtra("aggressive", aggressive);
+        startForegroundService(i);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         ui.postDelayed(new Runnable() {
             @Override
@@ -367,7 +386,23 @@ public class MainActivity extends Activity {
                 .setPositiveButton("继续", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int w) {
-                        startBurn();
+                        startBurn(false);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void confirmAggressive() {
+        new AlertDialog.Builder(this)
+                .setTitle("激进升温")
+                .setMessage("将强制混合负载、线程超订 1.5 倍、占空 100%，不再按目标温度收敛。\n\n"
+                        + "保护阈值同步上调：机身 50℃ 暂停 / 52℃ 急停、电池 47℃、CPU 表盘 105℃。\n\n"
+                        + "风险明显高于普通模式，确定开始？")
+                .setPositiveButton("开始", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        startBurn(true);
                     }
                 })
                 .setNegativeButton("取消", null)
@@ -455,6 +490,9 @@ public class MainActivity extends Activity {
         if (on && Engine.paused) {
             tvState.setText("已暂停 · 降温中");
             tvState.setTextColor(HOT);
+        } else if (on && Engine.aggressive) {
+            tvState.setText("⚡ 激进升温中 · 100% 满载");
+            tvState.setTextColor(0xFFFF3B30);
         } else if (on) {
             tvState.setText("运行中 · 屏幕保持常亮");
             tvState.setTextColor(0xFF3FB950);
@@ -492,7 +530,7 @@ public class MainActivity extends Activity {
                     + profile.title() + "（" + profile.source + "）\n" + profile.note);
         }
         tvMode.setText("传感器：" + Sensors.mode + " · 热状态 " + (ts < 0 ? "--" : ts)
-                + " · 模式 " + (Engine.mode == 1 ? "混合" : "纯计算")
+                + " · 模式 " + (Engine.aggressive ? "激进" : (Engine.mode == 1 ? "混合" : "纯计算"))
                 + (shizukuGranted() ? " · Shizuku 已授权" : (shizukuAlive() ? " · Shizuku 未授权" : "")));
         String note = Engine.note;
         if (note == null || note.isEmpty()) {
@@ -502,6 +540,7 @@ public class MainActivity extends Activity {
 
         btnToggle.setText(on ? "停止" : "开始烤机");
         btnToggle.setAllCaps(false);
+        btnAggressive.setVisibility(on ? View.GONE : View.VISIBLE);
         btnToggle.setBackground(roundRect(on ? 0xFF30363D : HOT, dp(14)));
         btnPerm.setText(shizukuGranted() ? "Shizuku 已授权（可读机身温度）" : "授权 Shizuku");
         btnPerm.setAllCaps(false);

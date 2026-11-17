@@ -22,11 +22,16 @@ public final class Engine {
     public static volatile long pausedMs;
     public static volatile int threads;
     public static volatile int mode;          // 0=纯计算 1=计算+内存带宽
+    public static volatile boolean aggressive; // 激进升温：不控温、超订线程、阈值上调
     public static volatile DeviceProfile profile;
     private static volatile int memFloats = 2_500_000;
 
     public static final double BATT_MAX = 45.0;
     public static final double CPU_MAX = 102.0;
+    public static final double AGGR_PAUSE = 50.0;
+    public static final double AGGR_ABORT = 52.0;
+    public static final double AGGR_BATT = 47.0;
+    public static final double AGGR_CPU = 105.0;
     /** 临界暂停：目标 +2℃，最高 62℃ */
     public static final double PAUSE_CAP = 62.0;
     /** 急停：临界 +2℃，最高 64℃ */
@@ -43,15 +48,28 @@ public final class Engine {
     }
 
     public static double pauseAt() {
-        return Math.min(PAUSE_CAP, target + 2.0);
+        return aggressive ? AGGR_PAUSE : Math.min(PAUSE_CAP, target + 2.0);
     }
 
     public static double abortAt() {
-        return Math.min(ABORT_CAP, pauseAt() + 2.0);
+        return aggressive ? AGGR_ABORT : Math.min(ABORT_CAP, pauseAt() + 2.0);
     }
 
-    public static synchronized void start(Context ctx) {
+    public static double battMax() {
+        return aggressive ? AGGR_BATT : BATT_MAX;
+    }
+
+    public static double cpuMax() {
+        return aggressive ? AGGR_CPU : CPU_MAX;
+    }
+
+    public static double resumeAt() {
+        return aggressive ? AGGR_PAUSE - 2.0 : target;
+    }
+
+    public static synchronized void start(Context ctx, boolean aggr) {
         if (running) return;
+        aggressive = aggr;
         Context app = ctx.getApplicationContext();
         Sensors.init();
         running = true;
@@ -68,7 +86,10 @@ public final class Engine {
 
         if (profile == null) profile = DeviceProfile.detect();
         memFloats = profile.memFloats;
-        int n = Math.max(1, Math.min(profile.workers, 16));
+        if (aggressive) mode = 1;
+        int n = aggressive
+                ? Math.max(1, Math.min(profile.cores + profile.cores / 2, 16))
+                : Math.max(1, Math.min(profile.workers, 16));
         threads = n;
         Thread[] ws = new Thread[n];
         for (int i = 0; i < n; i++) {
@@ -199,8 +220,8 @@ public final class Engine {
                 }
 
                 // 硬保护：直接结束
-                if ((!Float.isNaN(batt) && batt >= BATT_MAX + 1)
-                        || (!Float.isNaN(cpu) && cpu >= CPU_MAX + 2)
+                if ((!Float.isNaN(batt) && batt >= battMax() + 1)
+                        || (!Float.isNaN(cpu) && cpu >= cpuMax() + 2)
                         || m >= abortAt()
                         || thermalStatus >= 5) {
                     hardStop("急停：整机 " + fmt(m) + "℃ / CPU " + fmt(cpu) + "℃ / 热状态 " + thermalStatus);
@@ -209,23 +230,28 @@ public final class Engine {
 
                 // 临界暂停
                 boolean trip = m >= pauseAt()
-                        || (!Float.isNaN(batt) && batt >= BATT_MAX)
-                        || (!Float.isNaN(cpu) && cpu >= CPU_MAX);
+                        || (!Float.isNaN(batt) && batt >= battMax())
+                        || (!Float.isNaN(cpu) && cpu >= cpuMax());
                 if (!paused && trip) {
                     paused = true;
                     pauseCount++;
                     duty = 0;
                     integ = 0;
                     note = String.format("暂停：整机 %.1f℃（临界 %.0f℃）", m, pauseAt());
-                } else if (paused && m <= target
-                        && (Float.isNaN(batt) || batt <= BATT_MAX - 2)
-                        && (Float.isNaN(cpu) || cpu <= CPU_MAX - 6)) {
+                } else if (paused && m <= resumeAt()
+                        && (Float.isNaN(batt) || batt <= battMax() - 2)
+                        && (Float.isNaN(cpu) || cpu <= cpuMax() - 6)) {
                     paused = false;
                     note = "已降温，恢复负载";
                 }
 
                 if (paused) {
                     duty = 0;
+                    continue;
+                }
+
+                if (aggressive) {
+                    duty = 1.0;   // 激进模式不控温，直接满载
                     continue;
                 }
 
@@ -253,8 +279,8 @@ public final class Engine {
                 sleep(500);
                 float batt = Sensors.batteryC;
                 float cpu = Sensors.cpuC;
-                if ((!Float.isNaN(batt) && batt >= BATT_MAX + 1)
-                        || (!Float.isNaN(cpu) && cpu >= CPU_MAX + 2)) {
+                if ((!Float.isNaN(batt) && batt >= battMax() + 1)
+                        || (!Float.isNaN(cpu) && cpu >= cpuMax() + 2)) {
                     hardStop("看门狗急停：电池 " + fmt(batt) + "℃ / CPU " + fmt(cpu) + "℃");
                     break;
                 }

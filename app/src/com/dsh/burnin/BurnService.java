@@ -62,7 +62,8 @@ public class BurnService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (Engine.running) return START_STICKY;
-        Engine.start(this);
+        boolean aggr = intent != null && intent.getBooleanExtra("aggressive", false);
+        Engine.start(this, aggr);
         if (wakeLock != null) wakeLock.acquire();
         handler.removeCallbacks(ticker);
         handler.post(ticker);
