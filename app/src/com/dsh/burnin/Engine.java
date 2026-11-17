@@ -21,7 +21,8 @@ public final class Engine {
     public static volatile long startAt;
     public static volatile long pausedMs;
     public static volatile int threads;
-    public static volatile int mode;          // 0=纯计算 1=计算+内存带宽
+    public static volatile int mode;          // 用户选择：0=纯计算 1=计算+内存带宽
+    private static volatile int runMode;      // 本次运行实际使用：激进模式强制 1
     public static volatile boolean aggressive; // 激进升温：不控温、超订线程、阈值上调
     public static volatile DeviceProfile profile;
     private static volatile int memFloats = 2_500_000;
@@ -70,8 +71,8 @@ public final class Engine {
     public static synchronized void start(Context ctx, boolean aggr) {
         if (running) return;
         aggressive = aggr;
+        runMode = aggr ? 1 : mode;
         Context app = ctx.getApplicationContext();
-        Sensors.init();
         running = true;
         paused = false;
         duty = 0;
@@ -84,9 +85,8 @@ public final class Engine {
         maxMetric = Double.NaN;
         lastTick = System.currentTimeMillis();
 
-        if (profile == null) profile = DeviceProfile.detect();
+        if (profile == null) profile = DeviceProfile.quick();   // 不阻塞主线程，Activity 会补全
         memFloats = profile.memFloats;
-        if (aggressive) mode = 1;
         int n = aggressive
                 ? Math.max(1, Math.min(profile.cores + profile.cores / 2, 16))
                 : Math.max(1, Math.min(profile.workers, 16));
@@ -100,6 +100,16 @@ public final class Engine {
         }
         workers = ws;
 
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Sensors.init();
+                } catch (Throwable ignored) {
+                }
+            }
+        }, "sensor-init").start();
+
         monitor = new Thread(new Monitor(app), "burn-monitor");
         monitor.setDaemon(true);
         monitor.start();
@@ -112,7 +122,9 @@ public final class Engine {
     public static synchronized void stop() {
         running = false;
         paused = false;
+        aggressive = false;
         duty = 0;
+        startAt = 0;
         for (Thread t : workers) {
             if (t != null) t.interrupt();
         }
@@ -147,7 +159,7 @@ public final class Engine {
         public void run() {
             double x = 1.0 + id * 0.001;
             float[] arrA = null, arrB = null;
-            if (mode == 1) {
+            if (runMode == 1) {
                 arrA = new float[memFloats];
                 arrB = new float[memFloats];
                 for (int i = 0; i < arrA.length; i++) arrA[i] = 1.0f + i * 1e-6f;
@@ -225,7 +237,7 @@ public final class Engine {
                         || (!Float.isNaN(cpu) && cpu >= cpuMax() + 2)
                         || m >= abortAt()
                         || thermalStatus >= 5) {
-                    hardStop("急停：整机 " + fmt(m) + "℃ / CPU " + fmt(cpu) + "℃ / 热状态 " + thermalStatus);
+                    hardStop("急停：机身 " + fmt(m) + "℃ / CPU " + fmt(cpu) + "℃ / 热状态 " + thermalStatus);
                     break;
                 }
 

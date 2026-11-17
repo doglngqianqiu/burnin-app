@@ -47,6 +47,15 @@ public final class DeviceProfile {
     }
 
     public static DeviceProfile detect() {
+        return detect(true);
+    }
+
+    /** 不调用 Shizuku 的快速版本，可在主线程安全使用。 */
+    public static DeviceProfile quick() {
+        return detect(false);
+    }
+
+    private static DeviceProfile detect(boolean allowShizuku) {
         String brand = Build.BRAND == null ? "" : Build.BRAND;
         String model = Build.MODEL == null ? "" : Build.MODEL;
         String hardware = Build.HARDWARE == null ? "" : Build.HARDWARE;
@@ -56,7 +65,7 @@ public final class DeviceProfile {
         int cores = Runtime.getRuntime().availableProcessors();
 
         // 1) Shizuku：shell 身份读系统属性，最准
-        if (ShizukuShell.ready()) {
+        if (allowShizuku && ShizukuShell.ready()) {
             String out = ShizukuShell.exec(
                     "getprop ro.product.brand; getprop ro.product.model; "
                             + "getprop ro.board.platform; getprop ro.soc.model; "

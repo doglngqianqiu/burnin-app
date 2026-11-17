@@ -174,7 +174,11 @@ public class MainActivity extends Activity {
         btnMixed.setBackground(roundRect(mixed ? 0xFFB33A00 : 0xFF232A35, dp(12)));
     }
 
+    private volatile boolean initRunning;
+
     private void startSensorInit() {
+        if (initRunning) return;
+        initRunning = true;
         lastInitAt = System.currentTimeMillis();
         new Thread(new Runnable() {
             @Override
@@ -182,6 +186,8 @@ public class MainActivity extends Activity {
                 try {
                     Sensors.init();
                 } catch (Throwable ignored) {
+                } finally {
+                    initRunning = false;
                 }
                 ui.post(new Runnable() {
                     @Override
@@ -355,7 +361,7 @@ public class MainActivity extends Activity {
         tvMode.setPadding(0, dp(16), 0, 0);
         root.addView(tvMode);
 
-        tvNote = text("机身发烫、电池超过 45℃ 就停下歇一会儿。", 12, SUB, false);
+        tvNote = text("", 12, SUB, false);
         tvNote.setPadding(0, dp(6), 0, 0);
         root.addView(tvNote);
 
@@ -387,7 +393,12 @@ public class MainActivity extends Activity {
     private void startBurn(boolean aggressive) {
         Intent i = new Intent(this, BurnService.class);
         i.putExtra("aggressive", aggressive);
-        startForegroundService(i);
+        try {
+            startForegroundService(i);
+        } catch (Throwable t) {
+            Toast.makeText(this, "启动失败：" + t, Toast.LENGTH_LONG).show();
+            return;
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         ui.postDelayed(new Runnable() {
             @Override

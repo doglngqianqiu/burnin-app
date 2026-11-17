@@ -14,12 +14,14 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.graphics.drawable.Icon;
 
 /** 前台服务：持有烤机引擎，退到后台也不会被冻结。 */
 public class BurnService extends Service {
 
     private static final String CHANNEL = "burnin";
     private static final int NID = 7;
+    private static final String ACTION_STOP = "com.dsh.burnin.STOP";
 
     private Handler handler;
     private PowerManager.WakeLock wakeLock;
@@ -27,6 +29,10 @@ public class BurnService extends Service {
     private final Runnable ticker = new Runnable() {
         @Override
         public void run() {
+            if (!Engine.running) {   // 引擎自己急停后，服务跟着结束
+                stopSelf();
+                return;
+            }
             updateNotification();
             if (handler != null) handler.postDelayed(this, 2000);
         }
@@ -61,13 +67,23 @@ public class BurnService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (Engine.running) return START_STICKY;
-        boolean aggr = intent != null && intent.getBooleanExtra("aggressive", false);
+        // 通知栏的「停止」按钮
+        if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        // 进程被杀后系统可能用 null intent 重启服务：不要自动再烧
+        if (intent == null) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (Engine.running) return START_NOT_STICKY;
+        boolean aggr = intent.getBooleanExtra("aggressive", false);
         Engine.start(this, aggr);
-        if (wakeLock != null) wakeLock.acquire();
+        if (wakeLock != null) wakeLock.acquire(2 * 60 * 60 * 1000L);
         handler.removeCallbacks(ticker);
         handler.post(ticker);
-        return START_STICKY;
+        return START_NOT_STICKY;
     }
 
     @Override
@@ -105,6 +121,12 @@ public class BurnService extends Service {
                 .setContentText(text)
                 .setContentIntent(pi)
                 .setOngoing(true)
+                .addAction(new Notification.Action.Builder(
+                        Icon.createWithResource(this, R.drawable.ic_stat), "停止",
+                        PendingIntent.getService(this, 1,
+                                new Intent(this, BurnService.class).setAction(ACTION_STOP),
+                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
+                        .build())
                 .build();
     }
 
