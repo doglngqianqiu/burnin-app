@@ -212,9 +212,9 @@ public class MainActivity extends Activity {
         row.addView(cardCpu, lp1);
 
         LinearLayout cardBatt = card();
-        tvBattText = text("电池 --", 17, TEXT, true);
+        tvBattText = text("占空 0%", 17, TEXT, true);
         cardBatt.addView(tvBattText);
-        tvBattSub = text("负载 / 占空", 11, SUB, false);
+        tvBattSub = text("负载占空比", 11, SUB, false);
         cardBatt.addView(tvBattSub);
         LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1);
         lp2.leftMargin = dp(6);
@@ -478,7 +478,7 @@ public class MainActivity extends Activity {
 
     private void updateTargetText() {
         int t = (int) Engine.target;
-        tvTarget.setText(String.format("目标整机温度 %d℃ · 临界 %d℃", t, (int) Engine.pauseAt()));
+        tvTarget.setText(String.format("目标机身温度 %d℃ · 临界 %d℃", t, (int) Engine.pauseAt()));
     }
 
     private void render() {
@@ -507,13 +507,12 @@ public class MainActivity extends Activity {
         }
         tvMain.setText(Engine.fmt(shown) + "℃");
         tvMain.setTextColor(on ? TEXT : SUB);
-        tvSub.setText("整机（机身/电池）· 目标 " + (int) Engine.target + "℃");
+        tvSub.setText("机身温度（壳温）· 目标 " + (int) Engine.target + "℃");
         tvRun.setText(String.format("运行 %s · 峰值 %s · 暂停 %d 次",
                 Engine.elapsedText(), Engine.fmt((float) Engine.maxMetric), Engine.pauseCount));
         tvCpuText.setText("CPU " + Engine.fmt(Sensors.cpuC) + "℃");
-        tvBattText.setText("电池 " + Engine.fmt(Sensors.batteryC) + "℃");
-        tvBattSub.setText(on ? ("占空 " + Math.round(Engine.duty * 100) + "%"
-                + (Engine.paused ? " · 暂停" : "")) : "负载 / 占空");
+        tvBattText.setText("占空 " + Math.round(Engine.duty * 100) + "%"
+                + (on && Engine.paused ? " · 暂停" : ""));
 
         if (shizukuGranted() && Float.isNaN(Sensors.cpuC)
                 && System.currentTimeMillis() - lastInitAt > 4000) {
@@ -536,8 +535,8 @@ public class MainActivity extends Activity {
         if (note == null || note.isEmpty()) {
             note = on ? "临界自动暂停，降温后自动恢复" : "点开始后负载会逐渐拉满";
         }
-        String limit = String.format("触发阈值：机身 ≥%d℃ / 电池 ≥%d℃ 自动暂停，降温后恢复。",
-                Math.round(Engine.pauseAt()), Math.round(Engine.battMax()));
+        String limit = String.format("触发阈值：机身 ≥%d℃ 自动暂停，降温后恢复。",
+                Math.round(Engine.pauseAt()));
         tvNote.setText(note + "\n" + limit);
 
         btnToggle.setText(on ? "停止" : "开始烤机");

@@ -210,7 +210,8 @@ public final class Engine {
                 float skin = Sensors.skinC;
                 float batt = Sensors.batteryC;
                 float cpu = Sensors.cpuC;
-                double m = Float.isNaN(skin) ? batt : (Float.isNaN(batt) ? skin : Math.max(skin, batt));
+                // 控温对象：机身壳温（读不到时才退回电池）
+                double m = Float.isNaN(skin) ? batt : skin;
                 if (Double.isNaN(m)) continue;
                 metric = m;
                 maxMetric = Double.isNaN(maxMetric) ? m : Math.max(maxMetric, m);
@@ -237,7 +238,13 @@ public final class Engine {
                     pauseCount++;
                     duty = 0;
                     integ = 0;
-                    note = String.format("暂停：整机 %.1f℃（临界 %.0f℃）", m, pauseAt());
+                    if (!Float.isNaN(batt) && batt >= battMax()) {
+                        note = String.format("暂停：电池 %.1f℃ 达上限", batt);
+                    } else if (!Float.isNaN(cpu) && cpu >= cpuMax()) {
+                        note = String.format("暂停：CPU %.1f℃ 达上限", cpu);
+                    } else {
+                        note = String.format("暂停：机身 %.1f℃（临界 %.0f℃）", m, pauseAt());
+                    }
                 } else if (paused && m <= resumeAt()
                         && (Float.isNaN(batt) || batt <= battMax() - 2)
                         && (Float.isNaN(cpu) || cpu <= cpuMax() - 6)) {
