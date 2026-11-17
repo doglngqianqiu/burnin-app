@@ -1,0 +1,20 @@
+# 构建产物
+build/
+dist/
+*.apk
+*.idsig
+
+# 大体积依赖（用 scripts/fetch-deps.sh 下载）
+sdk/android.jar
+sdk/r8.jar
+sdk/*.zip
+sdk/android-12/
+sdk/*.aar
+
+# 签名
+*.keystore
+*.jks
+
+# 杂项
+.DS_Store
+*.log
