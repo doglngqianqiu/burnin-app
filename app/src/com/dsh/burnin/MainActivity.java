@@ -536,7 +536,9 @@ public class MainActivity extends Activity {
         if (note == null || note.isEmpty()) {
             note = on ? "临界自动暂停，降温后自动恢复" : "点开始后负载会逐渐拉满";
         }
-        tvNote.setText(note + "\n机身发烫、电池超过 45℃ 就停下歇一会儿。");
+        String limit = String.format("触发阈值：机身 ≥%d℃ / 电池 ≥%d℃ 自动暂停，降温后恢复。",
+                Math.round(Engine.pauseAt()), Math.round(Engine.battMax()));
+        tvNote.setText(note + "\n" + limit);
 
         btnToggle.setText(on ? "停止" : "开始烤机");
         btnToggle.setAllCaps(false);
